@@ -1,0 +1,140 @@
+name: Daily Beta Build
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+env:
+  UPSTREAM_REPO: uvcat7/ArrowVortex
+  UPSTREAM_BRANCH: beta
+  USERNAME: Psycast
+  FEED_URL: https://nuget.pkg.github.com/Psycast/index.json
+  VCPKG_BINARY_SOURCES: "clear;nuget,https://nuget.pkg.github.com/Psycast/index.json,readwrite"
+
+jobs:
+  check:
+    name: "Check for upstream changes"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      has_changes: ${{ steps.compare.outputs.has_changes }}
+      upstream_sha: ${{ steps.compare.outputs.upstream_sha }}
+      last_sha: ${{ steps.compare.outputs.last_sha }}
+    steps:
+      - name: Get latest upstream SHA
+        id: upstream
+        run: |
+          SHA=$(git ls-remote https://github.com/${{ env.UPSTREAM_REPO }}.git refs/heads/${{ env.UPSTREAM_BRANCH }} | cut -f1)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+
+      - name: Get last built SHA from releases
+        id: last_built
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName --jq '.[0].tagName // ""' | sed 's/^build-//')
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+
+      - name: Compare SHAs
+        id: compare
+        run: |
+          UPSTREAM="${{ steps.upstream.outputs.sha }}"
+          LAST="${{ steps.last_built.outputs.sha }}"
+          echo "Upstream SHA: $UPSTREAM"
+          echo "Last built SHA: $LAST"
+          if [ "$UPSTREAM" != "$LAST" ] && [ -n "$UPSTREAM" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+          echo "upstream_sha=$UPSTREAM" >> $GITHUB_OUTPUT
+          echo "last_sha=$LAST" >> $GITHUB_OUTPUT
+
+  build:
+    name: "Build Windows x64"
+    needs: check
+    if: needs.check.outputs.has_changes == 'true'
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout upstream beta branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ env.UPSTREAM_BRANCH }}
+
+      - name: Add NuGet sources
+        shell: pwsh
+        run: |
+          .$(vcpkg fetch nuget) `
+            sources add `
+            -Source "${{ env.FEED_URL }}" `
+            -StorePasswordInClearText `
+            -Name GitHubPackages `
+            -UserName "${{ env.USERNAME }}" `
+            -Password "${{ secrets.GH_PACKAGES_TOKEN }}"
+          .$(vcpkg fetch nuget) `
+            setapikey "${{ secrets.GH_PACKAGES_TOKEN }}" `
+            -Source "${{ env.FEED_URL }}"
+
+      - name: Configure CMake
+        run: >
+          cmake -Bbuild -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
+
+      - name: Build AV
+        run: cmake --build build --config Release --parallel "$env:NUMBER_OF_PROCESSORS"
+
+      - name: Collect into a directory
+        run: cmake --install build --config Release --prefix ./
+
+      - name: Zip artifacts
+        shell: pwsh
+        run: |
+          $sha = "${{ needs.check.outputs.upstream_sha }}".Substring(0, 7)
+          Compress-Archive -Path bin/assets, bin/noteskins, bin/settings, bin/ArrowVortex.exe `
+            -DestinationPath "ArrowVortex-beta-$sha.zip"
+
+      - name: Get commit message
+        id: commit_msg
+        shell: bash
+        run: |
+          MSG=$(git log -1 --pretty=format:"%B")
+          echo "msg<<EOF" >> $GITHUB_OUTPUT
+          echo "$MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          SHA="${{ needs.check.outputs.upstream_sha }}"
+          LAST="${{ needs.check.outputs.last_sha }}"
+          SHORT="${SHA:0:7}"
+          DATE=$(date -u '+%Y-%m-%d')
+
+          if [ -n "$LAST" ]; then
+            LAST_SHORT="${LAST:0:7}"
+            COMPARE="[Compare \`${LAST_SHORT}\` → \`${SHORT}\`](https://github.com/${{ env.UPSTREAM_REPO }}/compare/${LAST}...${SHA})"
+          else
+            COMPARE="(no previous build to compare against)"
+          fi
+
+          cat > release_notes.md << NOTES
+          ${{ steps.commit_msg.outputs.msg }}
+
+          ---
+
+          ${COMPARE}
+          NOTES
+
+          gh release create "build-$SHA" \
+            --repo "${{ github.repository }}" \
+            --title "ArrowVortex Nightly $SHORT ($DATE)" \
+            --notes-file release_notes.md \
+            "ArrowVortex-beta-$SHORT.zip"

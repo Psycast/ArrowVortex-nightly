@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>ArrowVortex Nightly Builds</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+	<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="container">
+	<header>
+		<img src="header.png" alt="ArrowVortex Nightly Builds" />
+		<div class="page-meta">
+			<span>source: <a href="https://github.com/uvcat7/ArrowVortex/tree/beta" target="_blank">uvcat7/ArrowVortex/beta</a></span> | 
+			<span>builds: <a href="https://github.com/Psycast/ArrowVortex-nightly/releases" target="_blank">Psycast/ArrowVortex-nightly</a></span>
+		</div>
+	</header>
+	<div id="status">loading releases...</div>
+	<div id="releases"></div>
+</div>
+<script>
+	const API = `https://api.github.com/repos/Psycast/ArrowVortex-nightly/releases?per_page=20`;
+
+	function formatDate(iso) {
+		return new Date(iso).toISOString().slice(0, 10);
+	}
+
+	function esc(s) {
+		return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+	}
+
+	function shortSha(tag) {
+		const m = tag.replace(/^build-/, '');
+		return m.length >= 7 ? m.slice(0, 7) : m;
+	}
+
+	function renderNotes(body) {
+		if (!body) return '';
+		const parts = body.split(/\r?\n/);
+		let html = '';
+		for (const line of parts) {
+			const trimmed = line.trim();
+			if (trimmed === '---') {
+				html += '<hr class="notes-divider">';
+			} else {
+				const linked = esc(trimmed).replace(
+					/\[([^\]]+)\]\(([^)]+)\)/g,
+					(_, text, url) => `<a href="${url}" target="_blank">${text}</a>`
+				);
+				const isMeta = trimmed.startsWith('Automated build') || trimmed.startsWith('Compare');
+				html += `<div class="${isMeta ? 'notes-meta' : ''}">${linked}</div>`;
+			}
+		}
+		return html;
+	}
+
+	async function load() {
+		const status = document.getElementById('status');
+		const releases = document.getElementById('releases');
+
+		try {
+			const res = await fetch(API, { headers: { Accept: 'application/vnd.github+json' } });
+			if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+			const data = await res.json();
+
+			status.style.display = 'none';
+
+			if (!data.length) {
+				status.style.display = '';
+				status.textContent = 'no releases yet.';
+				return;
+			}
+
+			data.forEach(release => {
+				const asset = release.assets.find(a => a.name.endsWith('.zip')) || release.assets[0];
+				const sha	= shortSha(release.tag_name);
+				const date	= formatDate(release.published_at);
+				const size	= asset ? (asset.size / 1024 / 1024).toFixed(1) + ' MB' : '—';
+				const notes = renderNotes(release.body);
+
+				const el = document.createElement('div');
+				el.className = 'release';
+				el.innerHTML = `
+					<div class="r-titlebar">
+						<span class="r-name"><a href="${release.html_url}">${esc(release.name || release.tag_name)}</a></span>
+					</div>
+					<div class="r-body">
+						<div class="r-row">
+							<span class="r-label">Date</span>
+							<span class="r-val">${esc(date)}</span>
+						</div>
+						<div class="r-row">
+							<span class="r-label">Commit</span>
+							<span class="r-val commit"><a href="https://github.com/uvcat7/ArrowVortex/commit/${esc(sha)}">${esc(sha)}</a></span>
+						</div>
+						<div class="r-row">
+							<span class="r-label">Size</span>
+							<span class="r-val">${esc(size)}</span>
+						</div>
+					</div>
+					<div class="r-action">
+						${notes ? `<div class="r-notes">${notes}</div>` : '<div class="r-notes notes-meta">no release notes</div>'}
+						<div class="r-action-right">
+							<a class="dl-btn${asset ? '' : ' disabled'}"
+								 href="${asset ? esc(asset.browser_download_url) : '#'}"
+								 ${asset ? 'download' : ''}>
+								Download
+							</a>
+						</div>
+					</div>
+				`;
+				releases.appendChild(el);
+			});
+		} catch (err) {
+			status.textContent = `error: ${err.message}`;
+		}
+	}
+	load();
+</script>
+</body>
+</html>
