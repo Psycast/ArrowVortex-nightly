@@ -102,21 +102,25 @@ jobs:
       - name: Build Release Notes
         id: release_notes
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SHA="${{ needs.check.outputs.upstream_sha }}"
           LAST="${{ needs.check.outputs.last_sha }}"
           SHORT="${SHA:0:7}"
           REPO_URL="https://github.com/${{ env.UPSTREAM_REPO }}"
 
-          # commit range
-          if [ -n "$LAST" ] && git cat-file -e "${LAST}^{commit}" 2>/dev/null; then
-            RANGE="${LAST}..${SHA}"
-          else
-            RANGE="-1 ${SHA}"
-          fi
+          > release_notes.md
 
-          # per commit
-          git log $RANGE --pretty=format:"- [%s]($REPO_URL/commit/%H)" | sed "s/\`/'/g" > release_notes.md
+          if [ -n "$LAST" ]; then
+            gh api "repos/${{ env.UPSTREAM_REPO }}/compare/${LAST}...${SHA}" \
+              --jq '.commits[] | "- [\(.commit.message | split("\n")[0] | gsub("`"; "'\''"))]($REPO_URL/commit/\(.sha))"' \
+              >> release_notes.md
+          else
+            gh api "repos/${{ env.UPSTREAM_REPO }}/commits/${SHA}" \
+              --jq '"- [\(.commit.message | split("\n")[0] | gsub("`"; "'\''"))]($REPO_URL/commit/\(.sha))"' \
+              >> release_notes.md
+          fi
 
           printf '\n---\n\n' >> release_notes.md
 
