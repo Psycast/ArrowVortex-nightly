@@ -27,13 +27,13 @@ header {
 
 .page-meta {
 	font-weight: bold;
-	font-size: 11px;
+	font-size: 12px;
 	letter-spacing: .1em;
 	color: #777;
 }
 
-a { color: #777; text-decoration: none; }
-a:hover { color: #5d3c55; }
+a { color: #cd9dc2; text-decoration: none; }
+a:hover { color: #936989; }
 
 #releases {
 	display: flex;
@@ -78,7 +78,7 @@ a:hover { color: #5d3c55; }
 
 .r-label {
 	padding: 6px 10px;
-	color: #777;
+	color: #e0e0e0;
 	font-size: 12px;
 	background: #131313;
 	border-right: 1px solid #333;
@@ -95,8 +95,8 @@ a:hover { color: #5d3c55; }
 }
 
 .r-val.commit {
-	color: #777;
-	font-size: 11px;
+	color: #e0e0e0;
+	font-size: 12px;
 }
 
 .r-action {
@@ -109,8 +109,8 @@ a:hover { color: #5d3c55; }
 }
 
 .r-notes {
-	font-size: 11px;
-	color: #777;
+	font-size: 12px;
+	color: #e0e0e0;
 	line-height: 1.65;
 	flex: 1;
 	min-width: 0;
@@ -126,11 +126,11 @@ a:hover { color: #5d3c55; }
 
 .r-notes .notes-meta {
 	color: #444;
-	font-size: 11px;
+	font-size: 12px;
 }
 
-.r-notes a { color: #5d3c55; text-decoration: none; }
-.r-notes a:hover { text-decoration: underline; }
+.r-notes a { color: #e0e0e0; }
+.r-notes a:hover { color: #936989; }
 
 .r-action-right {
 	flex-shrink: 0;
