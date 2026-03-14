@@ -99,24 +99,32 @@ jobs:
           Compress-Archive -Path bin/assets, bin/noteskins, bin/settings, bin/ArrowVortex.exe `
             -DestinationPath "ArrowVortex-beta-$sha.zip"
 
-      - name: Get commit message
-        id: commit_msg
-        shell: bash
-        run: |
-          MSG=$(git log -1 --pretty=format:"%B")
-          echo "msg<<EOF" >> $GITHUB_OUTPUT
-          echo "$MSG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Release Notes
+        id: release_notes
         shell: bash
         run: |
           SHA="${{ needs.check.outputs.upstream_sha }}"
           LAST="${{ needs.check.outputs.last_sha }}"
           SHORT="${SHA:0:7}"
-          DATE=$(date -u '+%Y-%m-%d')
+          REPO_URL="https://github.com/${{ env.UPSTREAM_REPO }}"
+
+          # commit range
+          if [ -n "$LAST" ] && git cat-file -e "${LAST}^{commit}" 2>/dev/null; then
+            RANGE="${LAST}..${SHA}"
+          else
+            RANGE="-1 ${SHA}"
+          fi
+
+          # per commit
+          > release_notes.md
+          git log $RANGE --pretty=format:"%H %s" | while IFS=' ' read -r hash subject rest; do
+            subject="$subject${rest:+ $rest}"
+            subject="${subject//\`/\\`}"
+            echo "- [${subject}](${REPO_URL}/commit/${hash})" >> release_notes.md
+          done
+          echo "" >> release_notes.md
+          echo "---" >> release_notes.md
+          echo "" >> release_notes.md
 
           if [ -n "$LAST" ]; then
             LAST_SHORT="${LAST:0:7}"
@@ -125,14 +133,14 @@ jobs:
             COMPARE="(no previous build to compare against)"
           fi
 
-          cat > release_notes.md << NOTES
-          ${{ steps.commit_msg.outputs.msg }}
-
-          ---
-
-          ${COMPARE}
-          NOTES
-
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          SHA="${{ needs.check.outputs.upstream_sha }}"
+          SHORT="${SHA:0:7}"
+          DATE=$(date -u '+%Y-%m-%d')
           gh release create "build-$SHA" \
             --repo "${{ github.repository }}" \
             --title "ArrowVortex Nightly $SHORT ($DATE)" \
