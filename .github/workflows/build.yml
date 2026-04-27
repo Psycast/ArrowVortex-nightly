@@ -34,7 +34,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SHA=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName --jq '.[0].tagName // ""' | sed 's/^build-//')
+          SHA=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName --jq '.[0].tagName // ""' | sed 's/^build-[0-9]*-//')
           echo "sha=$SHA" >> $GITHUB_OUTPUT
 
       - name: Compare SHAs
@@ -65,6 +65,13 @@ jobs:
         with:
           repository: ${{ env.UPSTREAM_REPO }}
           ref: ${{ env.UPSTREAM_BRANCH }}
+
+      - name: Set padded run number
+        id: run_number
+        shell: pwsh
+        run: |
+          $paddedRunNumber = "{0:D5}" -f ${{ github.run_number }}
+          echo "value=$paddedRunNumber" >> $env:GITHUB_OUTPUT
 
       - name: Add NuGet sources
         shell: pwsh
@@ -139,7 +146,8 @@ jobs:
           SHA="${{ needs.check.outputs.upstream_sha }}"
           SHORT="${SHA:0:7}"
           DATE=$(date -u '+%Y-%m-%d')
-          gh release create "build-$SHA" \
+          RUN="${{ steps.run_number.outputs.value }}"
+          gh release create "build-$RUN-$SHA" \
             --repo "${{ github.repository }}" \
             --title "ArrowVortex Nightly $SHORT ($DATE)" \
             --notes-file release_notes.md \

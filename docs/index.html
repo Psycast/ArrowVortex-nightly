@@ -73,6 +73,8 @@
 				return;
 			}
 
+			data.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+
 			data.forEach(release => {
 				const asset = release.assets.find(a => a.name.endsWith('.zip')) || release.assets[0];
 				const sha	= shortSha(release.tag_name);
