@@ -34,7 +34,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SHA=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName --jq '.[0].tagName // ""' | sed 's/^build-[0-9]*-//')
+          SHA=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName --jq '.[0].tagName // ""' | sed 's/^build-[0-9]*-//;s/^build-//')
           echo "sha=$SHA" >> $GITHUB_OUTPUT
 
       - name: Compare SHAs
