@@ -25,6 +25,10 @@ header {
 	text-align: center;
 }
 
+header img {
+	max-width: 100%;
+}
+
 .page-meta {
 	font-weight: bold;
 	font-size: 12px;
@@ -167,4 +171,25 @@ a:hover { color: #936989; }
 	color: #777;
 	letter-spacing: .06em;
 	padding: 8px 0;
+}
+
+@media (max-width: 650px) {
+	.r-action {
+		flex-direction: column-reverse;
+	}
+
+	.r-action-right {
+		width: 100%;
+		padding-top: 0;
+	}
+
+	.dl-btn {
+		display: block;
+		width: 100%;
+		text-align: center;
+	}
+
+	.r-notes {
+		width: 100%;
+	}
 }

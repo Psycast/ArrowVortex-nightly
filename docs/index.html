@@ -50,7 +50,7 @@
 					(_, text, url) => `<a href="${url}" target="_blank">${text}</a>`
 				);
 				const isMeta = trimmed.startsWith('Automated build') || trimmed.startsWith('Compare');
-				html += `<div class="${isMeta ? 'notes-meta' : ''}">${linked}</div>`;
+				html += `<div ${isMeta ? 'class="notes-meta"' : ''}>${linked}</div>`;
 			}
 		}
 		return html;
