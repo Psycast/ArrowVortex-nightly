@@ -8,9 +8,7 @@ on:
 env:
   UPSTREAM_REPO: uvcat7/ArrowVortex
   UPSTREAM_BRANCH: beta
-  USERNAME: Psycast
-  FEED_URL: https://nuget.pkg.github.com/Psycast/index.json
-  VCPKG_BINARY_SOURCES: "clear;nuget,https://nuget.pkg.github.com/Psycast/index.json,readwrite"
+  VCPKG_BINARY_SOURCES: "clear"
 
 jobs:
   check:
@@ -73,19 +71,13 @@ jobs:
           $paddedRunNumber = "{0:D5}" -f ${{ github.run_number }}
           echo "value=$paddedRunNumber" >> $env:GITHUB_OUTPUT
 
-      - name: Add NuGet sources
-        shell: pwsh
-        run: |
-          .$(vcpkg fetch nuget) `
-            sources add `
-            -Source "${{ env.FEED_URL }}" `
-            -StorePasswordInClearText `
-            -Name GitHubPackages `
-            -UserName "${{ env.USERNAME }}" `
-            -Password "${{ secrets.GH_PACKAGES_TOKEN }}"
-          .$(vcpkg fetch nuget) `
-            setapikey "${{ secrets.GH_PACKAGES_TOKEN }}" `
-            -Source "${{ env.FEED_URL }}"
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: C:/vcpkg/packages
+          key: vcpkg-x64-windows-static-md-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          restore-keys: |
+            vcpkg-x64-windows-static-md-
 
       - name: Configure CMake
         run: >
