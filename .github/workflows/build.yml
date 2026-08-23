@@ -71,14 +71,6 @@ jobs:
           $paddedRunNumber = "{0:D5}" -f ${{ github.run_number }}
           echo "value=$paddedRunNumber" >> $env:GITHUB_OUTPUT
 
-      - name: Cache vcpkg packages
-        uses: actions/cache@v4
-        with:
-          path: C:/vcpkg/packages
-          key: vcpkg-x64-windows-static-md-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
-          restore-keys: |
-            vcpkg-x64-windows-static-md-
-
       - name: Configure CMake
         run: >
           cmake -Bbuild -DCMAKE_BUILD_TYPE=Release
