@@ -32,7 +32,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          SHA=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName --jq '.[0].tagName // ""' | sed 's/^build-[0-9]*-//;s/^build-//')
+          NAME=$(gh release list --repo ${{ github.repository }} --limit 1 --json name --jq '.[0].name // ""')
+          SHA=$(echo "$NAME" | grep -oP '(?<=Nightly )[0-9a-f]{7}' || true)
           echo "sha=$SHA" >> $GITHUB_OUTPUT
 
       - name: Compare SHAs
@@ -42,7 +43,7 @@ jobs:
           LAST="${{ steps.last_built.outputs.sha }}"
           echo "Upstream SHA: $UPSTREAM"
           echo "Last built SHA: $LAST"
-          if [ "$UPSTREAM" != "$LAST" ] && [ -n "$UPSTREAM" ]; then
+          if [ "${UPSTREAM:0:7}" != "$LAST" ] && [ -n "$UPSTREAM" ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
             echo "has_changes=false" >> $GITHUB_OUTPUT
@@ -50,13 +51,13 @@ jobs:
           echo "upstream_sha=$UPSTREAM" >> $GITHUB_OUTPUT
           echo "last_sha=$LAST" >> $GITHUB_OUTPUT
 
-  build:
+  build-windows:
     name: "Build Windows x64"
     needs: check
     if: needs.check.outputs.has_changes == 'true'
     runs-on: windows-2022
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout upstream beta branch
         uses: actions/checkout@v4
@@ -64,18 +65,12 @@ jobs:
           repository: ${{ env.UPSTREAM_REPO }}
           ref: ${{ env.UPSTREAM_BRANCH }}
 
-      - name: Set padded run number
-        id: run_number
-        shell: pwsh
-        run: |
-          $paddedRunNumber = "{0:D5}" -f ${{ github.run_number }}
-          echo "value=$paddedRunNumber" >> $env:GITHUB_OUTPUT
-
       - name: Configure CMake
         run: >
           cmake -Bbuild -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
           -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
+          -DYML=YML
 
       - name: Build AV
         run: cmake --build build --config Release --parallel "$env:NUMBER_OF_PROCESSORS"
@@ -88,11 +83,97 @@ jobs:
         run: |
           $sha = "${{ needs.check.outputs.upstream_sha }}".Substring(0, 7)
           Compress-Archive -Path bin/assets, bin/noteskins, bin/settings, bin/ArrowVortex.exe `
-            -DestinationPath "ArrowVortex-beta-$sha.zip"
+            -DestinationPath "ArrowVortex-beta-windows-$sha.zip"
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v5
+        with:
+          name: windows-zip
+          path: ArrowVortex-beta-windows-*.zip
+          if-no-files-found: error
+
+  build-linux:
+    name: "Build Linux x64"
+    needs: check
+    if: needs.check.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout upstream beta branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ env.UPSTREAM_BRANCH }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -qq -y mono-devel nasm libltdl-dev \
+            autoconf autoconf-archive automake libtool \
+            libx11-dev libxft-dev libxext-dev \
+            libwayland-dev libxkbcommon-dev libegl1-mesa-dev \
+            libibus-1.0-dev zenity clang-tidy clang-format build-essential git \
+            pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev \
+            libaudio-dev libjack-dev libsndio-dev libusb-1.0-0-dev libx11-dev libxext-dev \
+            libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libwayland-dev \
+            libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
+            libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev fcitx-libs-dev \
+            libasound2-dev libdecor-0-dev python3-venv libthai-dev libpipewire-0.3-dev \
+            liburing-dev
+
+      - name: Configure CMake
+        run: >
+          cmake -Bbuild -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-linux
+          -DPRESET_NAME=linux-release
+          -DYML=YML
+
+      - name: Build AV
+        run: cmake --build build --config Release --parallel $(nproc)
+
+      - name: Collect into a directory
+        run: cmake --install build --config Release --prefix ./
+
+      - name: Zip artifacts
+        run: |
+          SHA="${{ needs.check.outputs.upstream_sha }}"
+          SHORT="${SHA:0:7}"
+          zip -r "ArrowVortex-beta-linux-$SHORT.zip" bin/assets bin/noteskins bin/settings bin/ArrowVortex
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v5
+        with:
+          name: linux-zip
+          path: ArrowVortex-beta-linux-*.zip
+          if-no-files-found: error
+
+  release:
+    name: "Create GitHub Release"
+    needs: [check, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows zip
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-zip
+          path: dist
+
+      - name: Download Linux zip
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-zip
+          path: dist
+
+      - name: Set padded run number
+        id: run_number
+        run: |
+          printf 'value=%05d\n' "${{ github.run_number }}" >> $GITHUB_OUTPUT
 
       - name: Build Release Notes
         id: release_notes
-        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -116,8 +197,7 @@ jobs:
           printf '\n---\n\n' >> release_notes.md
 
           if [ -n "$LAST" ]; then
-            LAST_SHORT="${LAST:0:7}"
-            printf '[Compare %s → %s](%s/compare/%s...%s)\n' "$LAST_SHORT" "$SHORT" "$REPO_URL" "$LAST" "$SHA" >> release_notes.md
+            printf '[Compare %s → %s](%s/compare/%s...%s)\n' "$LAST" "$SHORT" "$REPO_URL" "$LAST" "$SHA" >> release_notes.md
           else
             printf '(no previous build to compare against)\n' >> release_notes.md
           fi
@@ -125,14 +205,13 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
         run: |
           SHA="${{ needs.check.outputs.upstream_sha }}"
-          SHORT="${SHA:0:7}"
           DATE=$(date -u '+%Y-%m-%d')
           RUN="${{ steps.run_number.outputs.value }}"
           gh release create "build-$RUN-$SHA" \
             --repo "${{ github.repository }}" \
-            --title "ArrowVortex Nightly $SHORT ($DATE)" \
+            --title "ArrowVortex Nightly ${SHA:0:7} ($DATE)" \
             --notes-file release_notes.md \
-            "ArrowVortex-beta-$SHORT.zip"
+            dist/ArrowVortex-beta-windows-*.zip \
+            dist/ArrowVortex-beta-linux-*.zip
