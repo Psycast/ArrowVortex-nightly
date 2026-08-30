@@ -76,11 +76,26 @@
 			data.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
 
 			data.forEach(release => {
+				const build_count = release.assets.filter(a => a.name.endsWith('.zip')).length;
 				const asset = release.assets.find(a => a.name.endsWith('.zip')) || release.assets[0];
 				const sha	= shortSha(release.tag_name);
 				const date	= formatDate(release.published_at);
 				const size	= asset ? (asset.size / 1024 / 1024).toFixed(1) + ' MB' : '—';
 				const notes = renderNotes(release.body);
+
+				let download_size = '<div class="r-row"><span class="r-label">Size</span><span class="r-val">' + esc(size) + '</span></div>';
+				let download_buttons = `<a class="dl-btn${asset ? '' : ' disabled'}" href="${asset ? esc(asset.browser_download_url) : '#'}" ${asset ? 'download' : ''}>Download</a>`;
+
+				if(build_count > 1) {
+					download_size = ``;
+					download_buttons = ``;
+					for(let platform of ['windows', 'linux']) {
+						const asset = release.assets.find(a => a.name.indexOf(`-${platform}-`) !== -1);
+						const size	= asset ? (asset.size / 1024 / 1024).toFixed(1) + ' MB' : '--';
+						download_buttons += `<a class="dl-btn${asset ? '' : ' disabled'}" href="${asset ? esc(asset.browser_download_url) : '#'}" ${asset ? 'download' : ''}>${platform}<br />${size}</a>`;
+					}
+					download_buttons += `</ul>`;
+				}
 
 				const el = document.createElement('div');
 				el.className = 'release';
@@ -97,20 +112,11 @@
 							<span class="r-label">Commit</span>
 							<span class="r-val commit"><a href="https://github.com/uvcat7/ArrowVortex/commit/${esc(sha)}">${esc(sha)}</a></span>
 						</div>
-						<div class="r-row">
-							<span class="r-label">Size</span>
-							<span class="r-val">${esc(size)}</span>
-						</div>
+						${download_size}
 					</div>
 					<div class="r-action">
 						${notes ? `<div class="r-notes">${notes}</div>` : '<div class="r-notes notes-meta">no release notes</div>'}
-						<div class="r-action-right">
-							<a class="dl-btn${asset ? '' : ' disabled'}"
-								 href="${asset ? esc(asset.browser_download_url) : '#'}"
-								 ${asset ? 'download' : ''}>
-								Download
-							</a>
-						</div>
+						<div class="r-action-right">${download_buttons}</div>
 					</div>
 				`;
 				releases.appendChild(el);

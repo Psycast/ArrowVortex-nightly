@@ -153,6 +153,11 @@ a:hover { color: #936989; }
 	cursor: pointer;
 	letter-spacing: .06em;
 	white-space: nowrap;
+	display: block;
+	text-align: center;
+	line-height: 18px;
+	min-width: 125px;
+	margin: 0 0 10px 0;
 }
 
 .dl-btn:hover {
