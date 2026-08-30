@@ -32,8 +32,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          NAME=$(gh release list --repo ${{ github.repository }} --limit 1 --json name --jq '.[0].name // ""')
-          SHA=$(echo "$NAME" | grep -oP '(?<=Nightly )[0-9a-f]{7}' || true)
+          SHA=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName --jq '.[0].tagName // ""' | sed 's/^build-[0-9]*-//;s/^build-//')
           echo "sha=$SHA" >> $GITHUB_OUTPUT
 
       - name: Compare SHAs
@@ -43,7 +42,7 @@ jobs:
           LAST="${{ steps.last_built.outputs.sha }}"
           echo "Upstream SHA: $UPSTREAM"
           echo "Last built SHA: $LAST"
-          if [ "${UPSTREAM:0:7}" != "$LAST" ] && [ -n "$UPSTREAM" ]; then
+          if [ "$UPSTREAM" != "$LAST" ] && [ -n "$UPSTREAM" ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
             echo "has_changes=false" >> $GITHUB_OUTPUT
@@ -197,7 +196,8 @@ jobs:
           printf '\n---\n\n' >> release_notes.md
 
           if [ -n "$LAST" ]; then
-            printf '[Compare %s → %s](%s/compare/%s...%s)\n' "$LAST" "$SHORT" "$REPO_URL" "$LAST" "$SHA" >> release_notes.md
+            LAST_SHORT="${LAST:0:7}"
+            printf '[Compare %s → %s](%s/compare/%s...%s)\n' "$LAST_SHORT" "$SHORT" "$REPO_URL" "$LAST" "$SHA" >> release_notes.md
           else
             printf '(no previous build to compare against)\n' >> release_notes.md
           fi
