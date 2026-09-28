@@ -95,7 +95,7 @@
 					const asset = release.assets.find(a => a.name.endsWith('.zip')) || release.assets[0];
 					if(asset) {
 						const size	= (asset.size / 1024 / 1024).toFixed(1) + ' MB';
-						download_buttons += `<a class="dl-btn" href="${esc(asset.browser_download_url)}"}>${platform}<br />${size}</a>`;
+						download_buttons += `<a class="dl-btn" href="${esc(asset.browser_download_url)}"}>windows<br />${size}</a>`;
 					}
 				}
 
@@ -123,7 +123,9 @@
 				releases.appendChild(el);
 			});
 		} catch (err) {
+			status.style.display = '';
 			status.textContent = `error: ${err.message}`;
+			console.error(err);
 		}
 	}
 	load();
