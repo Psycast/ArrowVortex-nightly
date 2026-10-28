@@ -83,7 +83,7 @@
 
 				let download_buttons = ``;
 				if(build_count > 1) {
-					for(let platform of ['windows', 'linux']) {
+					for(let platform of ['windows', 'macos', 'linux']) {
 						const asset = release.assets.find(a => a.name.indexOf(`-${platform}-`) !== -1);
 						if(asset) {
 							const size	= (asset.size / 1024 / 1024).toFixed(1) + ' MB';

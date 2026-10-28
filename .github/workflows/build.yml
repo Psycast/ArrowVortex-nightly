@@ -91,6 +91,50 @@ jobs:
           path: ArrowVortex-beta-windows-*.zip
           if-no-files-found: error
 
+  build-macos:
+    name: "Build MacOS"
+    needs: check
+    if: needs.check.outputs.has_changes == 'true'
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout upstream beta branch
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ env.UPSTREAM_BRANCH }}
+
+      - name: Install dependencies
+        run: brew install pkg-config sdl3 nasm mono
+
+      - name: Configure CMake
+        run: >
+          cmake -Bbuild -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE="${VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=arm64-osx
+          -DPRESET_NAME=macos-release
+          -DYML=YML
+
+      - name: Build AV
+        run: cmake --build build --config Release --parallel $(sysctl -n hw.ncpu)
+
+      - name: Collect into a directory
+        run: cmake --install build --config Release --prefix ./
+
+      - name: Zip artifacts
+        run: |
+          SHA="${{ needs.check.outputs.upstream_sha }}"
+          SHORT="${SHA:0:7}"
+          zip -r "ArrowVortex-beta-macos-$SHORT.zip" bin/assets bin/noteskins bin/settings bin/ArrowVortex
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-arm64-zip
+          path: ArrowVortex-beta-macos-*.zip
+          if-no-files-found: error
+
   build-linux:
     name: "Build Linux x64"
     needs: check
@@ -150,7 +194,7 @@ jobs:
 
   release:
     name: "Create GitHub Release"
-    needs: [check, build-windows, build-linux]
+    needs: [check, build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -159,6 +203,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: windows-zip
+          path: dist
+
+      - name: Download MacOS zip
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-arm64-zip
           path: dist
 
       - name: Download Linux zip
@@ -215,4 +265,5 @@ jobs:
             --title "ArrowVortex Nightly ${SHA:0:7} ($DATE)" \
             --notes-file release_notes.md \
             dist/ArrowVortex-beta-windows-*.zip \
+            dist/ArrowVortex-beta-macos-*.zip \
             dist/ArrowVortex-beta-linux-*.zip
