@@ -22,6 +22,12 @@
 </div>
 <script>
 	const API = `https://api.github.com/repos/Psycast/ArrowVortex-nightly/releases?per_page=20`;
+	const PLATFORM_NAMES = {
+		"windows": "windows",
+		"macos-arm64": "macos",
+		"macos-intel": "macos (intel)",
+		"linux": "linux"
+	};
 
 	function formatDate(iso) {
 		return new Date(iso).toISOString().slice(0, 10);
@@ -83,11 +89,11 @@
 
 				let download_buttons = ``;
 				if(build_count > 1) {
-					for(let platform of ['windows', 'macos', 'linux']) {
+					for(let platform of ['windows', 'macos-arm64', 'macos-intel', 'linux']) {
 						const asset = release.assets.find(a => a.name.indexOf(`-${platform}-`) !== -1);
 						if(asset) {
 							const size	= (asset.size / 1024 / 1024).toFixed(1) + ' MB';
-							download_buttons += `<a class="dl-btn" href="${esc(asset.browser_download_url)}"}>${platform}<br />${size}</a>`;
+							download_buttons += `<a class="dl-btn" href="${esc(asset.browser_download_url)}"}>${PLATFORM_NAMES[platform]}<br />${size}</a>`;
 						}
 					}
 				}
