@@ -122,6 +122,10 @@ jobs:
       - name: Collect into a directory
         run: cmake --install build --config Release --prefix ./
 
+      - name: Ad-hoc sign app
+        run: |
+          codesign --force --deep --sign - ArrowVortex.app
+
       - name: Zip artifacts
         run: |
           SHA="${{ needs.check.outputs.upstream_sha }}"
@@ -165,6 +169,10 @@ jobs:
 
       - name: Collect into a directory
         run: cmake --install build --config Release --prefix ./
+
+      - name: Ad-hoc sign app
+        run: |
+          codesign --force --deep --sign - ArrowVortex.app
 
       - name: Zip artifacts
         run: |
